@@ -45,11 +45,149 @@ typedef struct {
  *    - Write yesId, noId
  * 7. Clean up and return 1 on success
  */
-int save_tree(const char *filename) {
-    // TODO: Implement this function
-    // This is complex - break it into smaller steps
-    // You'll need to use the Queue functions you implemented
-    return 0;
+int save_tree(const char *filename) 
+{
+    // Step 1: Return 0 if g_root is NULL
+    if (g_root == NULL) {
+        return 0;
+    }
+    
+    // Step 2: Open file for writing binary ("wb")
+    FILE *fp = fopen(filename, "wb");
+    if (fp == NULL) {
+        return 0;
+    }
+    
+    // Step 3: Initialize queue and NodeMapping array
+    Queue q;
+    q_init(&q);
+    
+    // Count nodes to allocate mapping array
+    int nodeCount = count_nodes(g_root);
+    NodeMapping *mappings = malloc(nodeCount * sizeof(NodeMapping));
+    if (mappings == NULL) {
+        fclose(fp);
+        q_free(&q);
+        return 0;
+    }
+    
+    // Step 4: Use BFS to assign IDs to all nodes
+    int nextId = 0;
+    
+    // Enqueue root with id=0
+    q_enqueue(&q, g_root, 0);
+    // Store mapping[0] = {g_root, 0}
+    mappings[0].node = g_root;
+    mappings[0].id = 0;
+    nextId = 1;
+    
+    // While queue not empty
+    while (!q_empty(&q)) {
+        Node *currentNode;
+        int currentId;
+        
+        // Dequeue node and id
+        q_dequeue(&q, &currentNode, &currentId);
+        
+        // If node has yes child: add to mappings, enqueue with new id
+        if (currentNode->yes != NULL) {
+            mappings[nextId].node = currentNode->yes;
+            mappings[nextId].id = nextId;
+            q_enqueue(&q, currentNode->yes, nextId);
+            nextId++;
+        }
+        
+        // If node has no child: add to mappings, enqueue with new id
+        if (currentNode->no != NULL) {
+            mappings[nextId].node = currentNode->no;
+            mappings[nextId].id = nextId;
+            q_enqueue(&q, currentNode->no, nextId);
+            nextId++;
+        }
+    }
+    
+    // Step 5: Write header (magic, version, nodeCount)
+    uint32_t magic = MAGIC;
+    uint32_t version = VERSION;
+    uint32_t count = nodeCount;
+    
+    if (fwrite(&magic, sizeof(uint32_t), 1, fp) != 1 ||
+        fwrite(&version, sizeof(uint32_t), 1, fp) != 1 ||
+        fwrite(&count, sizeof(uint32_t), 1, fp) != 1) {
+        fclose(fp);
+        free(mappings);
+        q_free(&q);
+        return 0;
+    }
+    
+    // Step 6: For each node in mapping order
+    for (int i = 0; i < nodeCount; i++) {
+        Node *node = mappings[i].node;
+        
+        // Write isQuestion (1 byte)
+        uint8_t isQuestion = node->isQuestion;
+        if (fwrite(&isQuestion, sizeof(uint8_t), 1, fp) != 1) {
+            fclose(fp);
+            free(mappings);
+            q_free(&q);
+            return 0;
+        }
+        
+        // Write textLen (4 bytes)
+        uint32_t textLen = strlen(node->text);
+        if (fwrite(&textLen, sizeof(uint32_t), 1, fp) != 1) {
+            fclose(fp);
+            free(mappings);
+            q_free(&q);
+            return 0;
+        }
+        
+        // Write text (textLen bytes, no null terminator)
+        if (fwrite(node->text, 1, textLen, fp) != textLen) {
+            fclose(fp);
+            free(mappings);
+            q_free(&q);
+            return 0;
+        }
+        
+        // Find yes child's id in mappings (or -1)
+        int32_t yesId = -1;
+        if (node->yes != NULL) {
+            for (int j = 0; j < nodeCount; j++) {
+                if (mappings[j].node == node->yes) {
+                    yesId = mappings[j].id;
+                    break;
+                }
+            }
+        }
+        
+        // Find no child's id in mappings (or -1)
+        int32_t noId = -1;
+        if (node->no != NULL) {
+            for (int j = 0; j < nodeCount; j++) {
+                if (mappings[j].node == node->no) {
+                    noId = mappings[j].id;
+                    break;
+                }
+            }
+        }
+        
+        // Write yesId, noId
+        if (fwrite(&yesId, sizeof(int32_t), 1, fp) != 1 ||
+            fwrite(&noId, sizeof(int32_t), 1, fp) != 1) {
+            fclose(fp);
+            free(mappings);
+            q_free(&q);
+            return 0;
+        }
+    }
+    
+    // Step 7: Clean up and return 1 on success
+    fclose(fp);
+    free(mappings);
+    q_free(&q);
+    
+    return 1;
 }
 
 /* TODO 28: Implement load_tree
@@ -83,8 +221,151 @@ int save_tree(const char *filename) {
  * - In load_error: free all allocated memory and return 0
  */
 int load_tree(const char *filename) {
-    // TODO: Implement this function
-    // This is the most complex function in the lab
-    // Take it step by step and test incrementally
+    // Step 1: Open file for reading binary ("rb")
+    FILE *fp = fopen(filename, "rb");
+    if (fp == NULL) {
+        return 0;
+    }
+    
+    // Variables for cleanup in case of error
+    Node **nodes = NULL;
+    int32_t *yesIds = NULL;
+    int32_t *noIds = NULL;
+    
+    // Step 2: Read and validate header (magic, version, count)
+    uint32_t magic, version, count;
+    
+    if (fread(&magic, sizeof(uint32_t), 1, fp) != 1 ||
+        fread(&version, sizeof(uint32_t), 1, fp) != 1 ||
+        fread(&count, sizeof(uint32_t), 1, fp) != 1) {
+        goto load_error;
+    }
+    
+    // Validate magic number and version
+    if (magic != MAGIC || version != VERSION) {
+        goto load_error;
+    }
+    
+    // Validate count is reasonable
+    if (count == 0 || count > 100000) {  // Sanity check
+        goto load_error;
+    }
+    
+    // Step 3: Allocate arrays for nodes and child IDs
+    nodes = calloc(count, sizeof(Node*));
+    yesIds = calloc(count, sizeof(int32_t));
+    noIds = calloc(count, sizeof(int32_t));
+    
+    if (nodes == NULL || yesIds == NULL || noIds == NULL) {
+        goto load_error;
+    }
+    
+    // Step 4: Read each node
+    for (uint32_t i = 0; i < count; i++) {
+        uint8_t isQuestion;
+        uint32_t textLen;
+        
+        // Read isQuestion, textLen
+        if (fread(&isQuestion, sizeof(uint8_t), 1, fp) != 1 ||
+            fread(&textLen, sizeof(uint32_t), 1, fp) != 1) {
+            goto load_error;
+        }
+        
+        // Validate textLen (e.g., < 10000)
+        if (textLen == 0 || textLen >= 10000) {
+            goto load_error;
+        }
+        
+        // Allocate and read text string (add null terminator!)
+        char *text = malloc(textLen + 1);  // +1 for null terminator
+        if (text == NULL) {
+            goto load_error;
+        }
+        
+        if (fread(text, 1, textLen, fp) != textLen) {
+            free(text);
+            goto load_error;
+        }
+        text[textLen] = '\0';  // CRITICAL: Add null terminator
+        
+        // Read yesId, noId
+        if (fread(&yesIds[i], sizeof(int32_t), 1, fp) != 1 ||
+            fread(&noIds[i], sizeof(int32_t), 1, fp) != 1) {
+            free(text);
+            goto load_error;
+        }
+        
+        // Validate IDs are in range [-1, count)
+        if (yesIds[i] < -1 || yesIds[i] >= (int32_t)count ||
+            noIds[i] < -1 || noIds[i] >= (int32_t)count) {
+            free(text);
+            goto load_error;
+        }
+        
+        // Create Node and store in nodes[i]
+        Node *newNode = malloc(sizeof(Node));
+        if (newNode == NULL) {
+            free(text);
+            goto load_error;
+        }
+        
+        newNode->text = text;
+        newNode->isQuestion = isQuestion;
+        newNode->yes = NULL;  // Will link later
+        newNode->no = NULL;   // Will link later
+        
+        nodes[i] = newNode;
+    }
+    
+    // Step 5: Link nodes using stored IDs
+    for (uint32_t i = 0; i < count; i++) {
+        // If yesIds[i] >= 0: nodes[i]->yes = nodes[yesIds[i]]
+        if (yesIds[i] >= 0) {
+            nodes[i]->yes = nodes[yesIds[i]];
+        }
+        
+        // If noIds[i] >= 0: nodes[i]->no = nodes[noIds[i]]
+        if (noIds[i] >= 0) {
+            nodes[i]->no = nodes[noIds[i]];
+        }
+    }
+    
+    // Step 6: Free old g_root if not NULL
+    if (g_root != NULL) {
+        free_tree(g_root);
+    }
+    
+    // Step 7: Set g_root = nodes[0]
+    g_root = nodes[0];
+    
+    // Step 8: Clean up temporary arrays
+    free(nodes);
+    free(yesIds);
+    free(noIds);
+    fclose(fp);
+    
+    // Step 9: Return 1 on success
+    return 1;
+    
+load_error:
+    // Error handling: free all allocated memory and return 0
+    if (nodes != NULL) {
+        for (uint32_t i = 0; i < count; i++) {
+            if (nodes[i] != NULL) {
+                if (nodes[i]->text != NULL) {
+                    free(nodes[i]->text);
+                }
+                free(nodes[i]);
+            }
+        }
+        free(nodes);
+    }
+    if (yesIds != NULL) {
+        free(yesIds);
+    }
+    if (noIds != NULL) {
+        free(noIds);
+    }
+    fclose(fp);
     return 0;
 }

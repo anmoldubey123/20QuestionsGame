@@ -56,150 +56,154 @@ void play_game() {
     refresh();
     getch();
     
-    // TODO: Implement the game loop
-    // Initialize FrameStack
-    // Push root
-    // Loop until stack empty or guess is correct
-    // Handle question nodes and leaf nodes differently
-    
-    //Step 2
+    // Step 2: Initialize FrameStack
     FrameStack stack;
     fs_init(&stack);
-
-    //Step 3
+    
+    // Step 3: Push root frame with answeredYes = -1
     fs_push(&stack, g_root, -1);
-
-    //Step 4
-    Node* parent = NULL;
+    
+    // Step 4: Set parent = NULL, parentAnswer = -1
+    Node *parent = NULL;
     int parentAnswer = -1;
-
-    //Step 5
-    while(stack.size!=0)
-    {
+    
+    // Step 5: While stack not empty
+    while (!fs_empty(&stack)) {
+        // Step 5a: Pop current frame
+        Frame current = fs_pop(&stack);
+        Node *currentNode = current.node;
+        
         clear();
         attron(COLOR_PAIR(5) | A_BOLD);
         mvprintw(0, 0, "%-80s", " Playing 20 Questions");
         attroff(COLOR_PAIR(5) | A_BOLD);
-        mvprintw(2, 2, "Think of an animal, and I'll try to guess it!");
-        refresh();
-
-
-        Frame currFrame = fs_pop(&stack);
-        Node* currNode = currFrame.node;
-        if(currNode->isQuestion)
-        {
-            char prompt[256];
-            snprintf(prompt, sizeof(prompt), "%s (y/n): ", currNode->text);
-            int ans = get_yes_no(5, 2, prompt);
-
-            parent = currNode;
-            parentAnswer = ans;
-
-            Node* nextNode; 
-            if(ans==1)
-            {
-                nextNode = currNode->yes;
+        
+        // Step 5b: If current node is a question
+        if (currentNode->isQuestion) {
+            // Display question and get user's answer
+            int answer = get_yes_no(4, 2, currentNode->text);
+            
+            // Set parent = current node
+            parent = currentNode;
+            // Set parentAnswer = answer
+            parentAnswer = answer;
+            
+            // Push appropriate child (yes or no) onto stack
+            if (answer) {
+                if (currentNode->yes != NULL) {
+                    fs_push(&stack, currentNode->yes, 1);
+                }
+            } else {
+                if (currentNode->no != NULL) {
+                    fs_push(&stack, currentNode->no, 0);
+                }
             }
-            else 
-            {
-                nextNode = currNode->no;
-            }
+        } 
+        // Step 5c: If current node is a leaf (animal)
+        else {
+            // Ask "Is it a [animal]?"
+            char guessQuestion[256];
+            snprintf(guessQuestion, sizeof(guessQuestion), "Is it a %s? (y/n): ", currentNode->text);
+            int correct = get_yes_no(4, 2, guessQuestion);
+            
+            // If correct: celebrate and break
+            if (correct) {
+                attron(COLOR_PAIR(3) | A_BOLD);
+                mvprintw(6, 2, "I guessed it! I'm so smart!");
+                attroff(COLOR_PAIR(3) | A_BOLD);
+                mvprintw(8, 2, "Press any key to continue...");
+                refresh();
+                getch();
+                break;
+            } 
+            // If wrong: LEARNING PHASE
+            else {
+// Step 5c.i: Get correct animal name from user
+                clear();
+                attron(COLOR_PAIR(5) | A_BOLD);
+                mvprintw(0, 0, "%-80s", " Learning New Animal");
+                attroff(COLOR_PAIR(5) | A_BOLD);
 
-            fs_push(&stack, nextNode, ans);
-        }
-        else 
-        {
-            char guessPrompt[256];
-            snprintf(guessPrompt, sizeof(guessPrompt), "Is it a %s? (y/n): ", currNode->text);
-            int correct = get_yes_no(5, 2, guessPrompt);
+                mvprintw(2, 2, "I give up! You win!");
+                char *correctAnimalInput = get_input(4, 2, "What animal were you thinking of? ");
+                // Make a copy of the animal name since get_input uses a static buffer
+                char correctAnimal[256];
+                strcpy(correctAnimal, correctAnimalInput);
 
-            if(correct==1)
-            {
-                mvprintw(7, 2, "Yay! I guessed it! 🎉  Press any key...");
+                // Step 5c.ii: Get distinguishing question
+                char questionPrompt[512];
+                snprintf(questionPrompt, sizeof(questionPrompt), 
+                        "Please give me a yes/no question that distinguishes a %s from a %s: ",
+                        correctAnimal, currentNode->text);
+                char *newQuestionInput = get_input(6, 2, questionPrompt);
+                // Make a copy of the question since get_input uses a static buffer
+                char newQuestionText[256];
+                strcpy(newQuestionText, newQuestionInput);
+
+                // Step 5c.iii: Get answer for new animal (y/n for the question)
+                char answerPrompt[512];
+                snprintf(answerPrompt, sizeof(answerPrompt),
+                        "For a %s, what is the answer to \"%s\"? (y/n): ",
+                        correctAnimal, newQuestionText);
+                int newAnswer = get_yes_no(8, 2, answerPrompt);
+
+                // Step 5c.iv: Create new question node and new animal node
+                Node *newQuestion = create_question_node(newQuestionText);
+                Node *newAnimal = create_animal_node(correctAnimal);
+
+                // Step 5c.v: Link them: if newAnswer is yes, newQuestion->yes = newAnimal
+                if (newAnswer) {
+                    newQuestion->yes = newAnimal;
+                    newQuestion->no = currentNode;
+                } else {
+                    newQuestion->no = newAnimal;
+                    newQuestion->yes = currentNode;
+                }
+                
+                // Step 5c.vi: Update parent pointer (or g_root if parent is NULL)
+                if (parent == NULL) {
+                    // We're replacing the root
+                    g_root = newQuestion;
+                } else if (parentAnswer == 1) {
+                    // We came from the yes branch
+                    parent->yes = newQuestion;
+                } else {
+                    // We came from the no branch
+                    parent->no = newQuestion;
+                }
+                
+                // Step 5c.vii: Create Edit record and push to g_undo
+                Edit edit;
+                edit.type = EDIT_INSERT_SPLIT;
+                edit.parent = parent;
+                edit.wasYesChild = parentAnswer;
+                edit.oldLeaf = currentNode;
+                edit.newQuestion = newQuestion;
+                edit.newLeaf = newAnimal;
+                es_push(&g_undo, edit);
+                
+                // Step 5c.viii: Clear g_redo stack
+                es_clear(&g_redo);
+                
+                // Step 5c.ix: Update g_index with canonicalized question
+                char *canonicalQuestion = canonicalize(newQuestionText);
+                // Get ID for the new animal (we can use a simple counter based on tree size)
+                int animalId = count_nodes(g_root);
+                h_put(&g_index, canonicalQuestion, animalId);
+                free(canonicalQuestion);
+                
+                attron(COLOR_PAIR(3));
+                mvprintw(10, 2, "Thanks! I've learned about %s!", correctAnimal);
+                attroff(COLOR_PAIR(3));
+                mvprintw(12, 2, "Press any key to continue...");
                 refresh();
                 getch();
                 break;
             }
-
-            char* newAnimalName_in  = get_input(7, 2, "What animal were you thinking of? ");
-            char* newQuestionText_in= get_input(9, 2, "Give me a yes/no question to distinguish them: ");
-
-            char* newAnimalName  = strdup(newAnimalName_in);
-            char* newQuestionText= strdup(newQuestionText_in);
-
-            int newAns = get_yes_no(11, 2, "For your animal, what is the answer? (y/n): ");
-
-            Node* newQuestion = create_question_node(newQuestionText);
-            Node* newLeaf = create_animal_node(newAnimalName);
-
-            free(newAnimalName);
-            free(newQuestionText);
-
-            if(newAns==1)
-            {
-                newQuestion->yes = newLeaf;
-                newQuestion->no = currNode;
-            }
-            else 
-            {
-                newQuestion->yes = currNode;
-                newQuestion->no = newLeaf;
-            }
-
-            clear();
-            mvprintw(15, 2, "[dbg] newQ=%p  yes=%p  no=%p  oldLeaf=%p  newLeaf=%p",
-            (void*)newQuestion, (void*)newQuestion->yes, (void*)newQuestion->no,
-            (void*)currNode, (void*)newLeaf);
-            mvprintw(16, 2, "[dbg] yes txt: %s", newQuestion->yes ? newQuestion->yes->text : "<null>");
-            mvprintw(17, 2, "[dbg]  no txt: %s", newQuestion->no  ? newQuestion->no->text  : "<null>");
-            refresh(); getch();
-
-            if(parent==NULL)
-            {
-                g_root = newQuestion;
-            }
-            else 
-            {
-                if(parentAnswer==1)
-                {
-                    parent->yes = newQuestion;
-                }
-                else 
-                {
-                    parent->no = newQuestion;
-                }
-            }
-
-            Edit e;
-            e.type = EDIT_INSERT_SPLIT;
-            e.parent = parent;
-            e.wasYesChild = (parent == NULL) ? -1 : parentAnswer;
-            e.oldLeaf = currNode;
-            e.newQuestion = newQuestion;
-            e.newLeaf = newLeaf;
-            es_push(&g_undo, e);
-
-            es_clear(&g_redo);
-
-            char* canon = canonicalize(newQuestion->text);
-
-            static int nextAnimalId = 1;
-
-            if(newAns==1)
-            {
-                h_put(&g_index, canon, nextAnimalId++);
-            }
-
-            free(canon);
-
-            mvprintw(13, 2, "Thanks! I learned something new. Press any key to continue...");
-            refresh();
-            getch();
-
-            break;
         }
     }
     
+    // Step 6: Free stack
     fs_free(&stack);
 }
 

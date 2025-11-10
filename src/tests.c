@@ -188,6 +188,7 @@ void test_integrity() {
     assert(check_integrity());
     
     /* Invalid tree - question with one child */
+    free_tree(root->no);
     root->no = NULL;
     assert(!check_integrity());
     
