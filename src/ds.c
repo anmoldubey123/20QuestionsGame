@@ -16,16 +16,18 @@
  */
 Node *create_question_node(const char *question) 
 {
+    // Allocate memory for new node
     Node* newNode = (Node*)malloc(sizeof(Node));
     if(newNode==NULL)
     {
-        return NULL;
+        return NULL;  // Return NULL if allocation fails
     }
 
-    newNode->text = strdup(question);
-    newNode->yes = NULL;
-    newNode->no = NULL;
-    newNode->isQuestion = 1;
+    // Copy question string to heap and set node properties
+    newNode->text = strdup(question);  // strdup allocates and copies string
+    newNode->yes = NULL;  // Will be set later when children are added
+    newNode->no = NULL;   // Will be set later when children are added
+    newNode->isQuestion = 1;  // Mark as question node (not a leaf)
 
     return newNode;
 }
@@ -36,16 +38,18 @@ Node *create_question_node(const char *question)
  */
 Node *create_animal_node(const char *animal) 
 {
+    // Allocate memory for new animal node
     Node* animalNode = (Node*)malloc(sizeof(Node));
     if(animalNode==NULL)
     {
-        return NULL;
+        return NULL;  // Return NULL if allocation fails
     }
 
-    animalNode->text = strdup(animal);
-    animalNode->yes = NULL;
-    animalNode->no = NULL;
-    animalNode->isQuestion = 0;
+    // Copy animal name to heap and set node properties
+    animalNode->text = strdup(animal);  // strdup allocates and copies string
+    animalNode->yes = NULL;  // Leaf nodes have no children
+    animalNode->no = NULL;   // Leaf nodes have no children
+    animalNode->isQuestion = 0;  // Mark as leaf node (animal)
 
     return animalNode;
 }
@@ -61,15 +65,19 @@ Node *create_animal_node(const char *animal)
  */
 void free_tree(Node *node) 
 {
+    // Base case: nothing to free if node is NULL
     if(node==NULL)
     {
         return;
     }
     
-    free_tree(node->yes);
-    free_tree(node->no);
-    free(node->text);
-    free(node);
+    // Recursively free children first (post-order traversal)
+    free_tree(node->yes);  // Free left subtree
+    free_tree(node->no);   // Free right subtree
+    
+    // Then free this node's data
+    free(node->text);  // Free the string allocated by strdup
+    free(node);        // Free the node structure itself
 }
 
 /* TODO 4: Implement count_nodes (recursive)
@@ -78,11 +86,13 @@ void free_tree(Node *node)
  */
 int count_nodes(Node *root) 
 {
+    // Base case: NULL tree has 0 nodes
     if(root==NULL)
     {
         return 0;
     }
 
+    // Count this node (1) plus all nodes in both subtrees
     return 1 + count_nodes(root->yes) + count_nodes(root->no);
 }
 
@@ -95,16 +105,19 @@ int count_nodes(Node *root)
  */
 void fs_init(FrameStack *s) 
 {
+    // Allocate initial array with capacity 16
     s->frames = (Frame*)malloc(16*sizeof(Frame));
     if(s->frames==NULL)
     {
+        // If allocation fails, set everything to 0/NULL
         s->size = 0;
         s->capacity = 0;
         return;
     }
 
-    s->size = 0;
-    s->capacity = 16;
+    // Initialize stack as empty with capacity 16
+    s->size = 0;       // Stack starts empty
+    s->capacity = 16;  // Initial capacity for dynamic array
 }
 
 /* TODO 6: Implement fs_push
@@ -116,30 +129,37 @@ void fs_init(FrameStack *s)
 void fs_push(FrameStack *s, Node *node, int answeredYes) 
 {
     int newCapacity;
+    
+    // Check if we need to resize the array
     if(s->size >= s->capacity)
     {
+        // Calculate new capacity (handle edge case where capacity is 0)
         if(s->capacity==0)
         {
             newCapacity = 1;
         }
         else 
         {
-            newCapacity = s->capacity * 2;
+            newCapacity = s->capacity * 2;  // Double the capacity
         }
         
+        // Reallocate array with new capacity
         Frame* temp = realloc(s->frames, newCapacity*sizeof(Frame));
         if(temp==NULL)
         {
-            return;
+            return;  // Failed to resize, don't push
         }
 
+        // Update stack with new array and capacity
         s->frames = temp;
         s->capacity = newCapacity;
     }
 
+    // Add new frame to top of stack
     s->frames[s->size].node = node;
     s->frames[s->size].answeredYes = answeredYes;
 
+    // Increment size to reflect new element
     s->size = s->size + 1;
 }
 
@@ -150,7 +170,10 @@ void fs_push(FrameStack *s, Node *node, int answeredYes)
  */
 Frame fs_pop(FrameStack *s) 
 {
+    // Decrement size first (top element is at size-1)
     s->size = s->size - 1;
+    
+    // Return the frame that was at the top
     return s->frames[s->size];
 }
 
@@ -159,12 +182,13 @@ Frame fs_pop(FrameStack *s)
  */
 int fs_empty(FrameStack *s) 
 {
+    // Check if stack has no elements
     if(s->size==0)
     {
-        return 1;
+        return 1;  // Stack is empty
     }
 
-    return 0;
+    return 0;  // Stack has elements
 }
 
 /* TODO 9: Implement fs_free
@@ -174,7 +198,10 @@ int fs_empty(FrameStack *s)
  */
 void fs_free(FrameStack *s) 
 {
+    // Free the dynamically allocated array
     free(s->frames);
+    
+    // Reset all fields to indicate empty/freed stack
     s->frames = NULL;
     s->size = 0;
     s->capacity = 0;
@@ -187,16 +214,19 @@ void fs_free(FrameStack *s)
  */
 void es_init(EditStack *s) 
 {
+    // Allocate initial array with capacity 16 for Edit structs
     s->edits = (Edit*)malloc(16*sizeof(Edit));
     if(s->edits==NULL)
     {
+        // If allocation fails, set everything to 0/NULL
         s->size = 0;
         s->capacity = 0;
         return;
     }
 
-    s->size = 0;
-    s->capacity = 16;
+    // Initialize stack as empty with capacity 16
+    s->size = 0;       // Stack starts empty
+    s->capacity = 16;  // Initial capacity for dynamic array
 }
 
 /* TODO 11: Implement es_push
@@ -207,28 +237,36 @@ void es_init(EditStack *s)
 void es_push(EditStack *s, Edit e) 
 {
     int newCapacity;
+    
+    // Check if we need to resize the array
     if(s->size >= s->capacity)
     {
+        // Calculate new capacity (handle edge case where capacity is 0)
         if(s->capacity == 0)
         {
             newCapacity = 1;
         }
         else
         {
-            newCapacity = s->capacity * 2;
+            newCapacity = s->capacity * 2;  // Double the capacity
         }
 
+        // Reallocate array with new capacity
         Edit* temp = realloc(s->edits, newCapacity*sizeof(Edit));
         if(temp==NULL)
         {
-            return;
+            return;  // Failed to resize, don't push
         }
 
+        // Update stack with new array and capacity
         s->edits = temp;
         s->capacity = newCapacity;
     }
 
+    // Add new edit to top of stack (copy struct)
     s->edits[s->size] = e;
+    
+    // Increment size to reflect new element
     s->size = s->size + 1;
 }
 
@@ -237,7 +275,10 @@ void es_push(EditStack *s, Edit e)
  */
 Edit es_pop(EditStack *s) 
 {
+    // Decrement size first (top element is at size-1)
     s->size = s->size - 1;
+    
+    // Return the edit that was at the top
     return s->edits[s->size];
 }
 
@@ -246,11 +287,12 @@ Edit es_pop(EditStack *s)
  */
 int es_empty(EditStack *s) 
 {
+    // Check if stack has no elements
     if(s->size==0)
     {
-        return 1;
+        return 1;  // Stack is empty
     }
-    return 0;
+    return 0;  // Stack has elements
 }
 
 /* TODO 14: Implement es_clear
@@ -259,6 +301,7 @@ int es_empty(EditStack *s)
  */
 void es_clear(EditStack *s) 
 {
+    // Reset size without freeing memory (keeps capacity for reuse)
     s->size = 0;
 }
 
@@ -281,9 +324,10 @@ void free_edit_stack(EditStack *s) {
  */
 void q_init(Queue *q) 
 {
-    q->front = NULL;
-    q->rear = NULL;
-    q->size = 0;
+    // Initialize empty queue
+    q->front = NULL;  // No elements at front
+    q->rear = NULL;   // No elements at rear
+    q->size = 0;      // Queue is empty
 }
 
 /* TODO 16: Implement q_enqueue
@@ -299,22 +343,27 @@ void q_init(Queue *q)
  */
 void q_enqueue(Queue *q, Node *node, int id) 
 {
+    // Create new queue node
     QueueNode* newQNode = (QueueNode*)malloc(sizeof(QueueNode));
-    newQNode->treeNode = node;
-    newQNode->id = id;
-    newQNode->next = NULL;
+    newQNode->treeNode = node;  // Store the tree node
+    newQNode->id = id;          // Store the ID
+    newQNode->next = NULL;      // This will be the last node
 
+    // Add to queue
     if(q->rear==NULL)
     {
+        // Queue was empty, new node is both front and rear
         q->front = newQNode;
         q->rear = newQNode;
     }
     else
     {
-        q->rear->next = newQNode;
-        q->rear = newQNode;
+        // Queue has elements, add to rear
+        q->rear->next = newQNode;  // Link old rear to new node
+        q->rear = newQNode;        // Update rear pointer
     }
 
+    // Increment queue size
     q->size = q->size + 1;
 }
 
@@ -330,39 +379,45 @@ void q_enqueue(Queue *q, Node *node, int id)
  */
 int q_dequeue(Queue *q, Node **node, int *id) 
 {
+    // Check if queue is empty
     if(q->front==NULL)
     {
-        return 0;
+        return 0;  // Nothing to dequeue
     }
 
-    *node = q->front->treeNode;
-    *id = q->front->id;
+    // Extract data from front node
+    *node = q->front->treeNode;  // Return tree node via pointer
+    *id = q->front->id;           // Return ID via pointer
 
-    QueueNode* temp = q->front;
+    // Remove front node from queue
+    QueueNode* temp = q->front;  // Save for freeing
+    q->front = q->front->next;   // Move front to next node
 
-    q->front = q->front->next;
-
+    // If queue is now empty, update rear too
     if(q->front==NULL)
     {
         q->rear = NULL;
     }
 
+    // Free the old front node
     free(temp);
-    q->size--;
     
-    return 1;
+    // Decrement size and indicate success
+    q->size--;
+    return 1;  // Successfully dequeued
 }
 
 /* TODO 18: Implement q_empty
  * Return 1 if size == 0, otherwise 0
  */
 int q_empty(Queue *q) {
+    // Check if queue has no elements
     if(q->size==0)
     {
-        return 1;
+        return 1;  // Queue is empty
     }
 
-    return 0;
+    return 0;  // Queue has elements
 }
 
 /* TODO 19: Implement q_free
@@ -374,11 +429,13 @@ void q_free(Queue *q)
     Node* n;
     int id; 
 
+    // Dequeue all elements to free queue nodes
     while(q_dequeue(q, &n, &id))
     {
-
+        // q_dequeue frees the QueueNode, just continue
     }
 
+    // Ensure queue is in clean state
     q->front = NULL;
     q->rear = NULL;
     q->size = 0;
@@ -406,26 +463,33 @@ void q_free(Queue *q)
  */
 char *canonicalize(const char *s) 
 {
+    // Allocate buffer for canonicalized string
     char* resultBuffer = (char*)malloc(strlen(s)+1);
-    int j = 0;
+    int j = 0;  // Index for result buffer
+    
+    // Process each character in input string
     for(int i = 0; s[i]!='\0'; i++)
     {
         if(isalnum(s[i]))
         {
+            // Keep alphanumeric characters, convert to lowercase
             resultBuffer[j] = tolower(s[i]);
             j++;
         }
         else if(isspace(s[i]))
         {
+            // Replace spaces with underscores
             resultBuffer[j] = '_';
             j++;
         }
         else 
         {
+            // Skip punctuation and other characters
             continue;
         }
     }
 
+    // Null-terminate the result string
     resultBuffer[j] = '\0';
     return resultBuffer;
 }
@@ -437,9 +501,12 @@ char *canonicalize(const char *s)
  * Return hash
  */
 unsigned h_hash(const char *s) {
-    unsigned hash = 5381;
+    unsigned hash = 5381;  // Initial hash value (djb2 magic number)
+    
+    // Process each character in string
     for(int i = 0; s[i]!='\0'; i++)
     {
+        // hash * 33 + c (using bit shift for efficiency)
         hash = ((hash << 5) + hash) + s[i]; 
     }
     return hash;
@@ -452,9 +519,12 @@ unsigned h_hash(const char *s) {
  */
 void h_init(Hash *h, int nbuckets) 
 {
+    // Allocate array of bucket pointers (calloc initializes to NULL)
     h->buckets = (Entry**)calloc(nbuckets, sizeof(Entry*));
-    h->nbuckets = nbuckets;
-    h->size = 0;
+    
+    // Initialize hash table properties
+    h->nbuckets = nbuckets;  // Number of buckets
+    h->size = 0;             // Start with no entries
 }
 
 /* TODO 23: Implement h_put
@@ -477,66 +547,78 @@ void h_init(Hash *h, int nbuckets)
  */
 int h_put(Hash *h, const char *key, int animalId) 
 {
+    // Calculate which bucket this key belongs in
     int idx = h_hash(key) % h->nbuckets;
 
+    // Search for existing entry with this key
     Entry* curr = h->buckets[idx];
     while(curr!=NULL)
     {
         if(strcmp(curr->key, key)==0)
         {
-            break;
+            break;  // Found matching key
         }
         curr = curr->next;
     }
 
     if(curr!=NULL)
     {
+        // Entry exists, check if animalId already in list
         for(int i = 0; i<curr->vals.count; i++)
         {
             if(curr->vals.ids[i]==animalId)
             {
-                return 0;
+                return 0;  // Animal already associated with this key
             }
         }
 
+        // Need to add animalId to existing entry
         if(curr->vals.count==curr->vals.capacity)
         {
+            // Need to resize the ids array
             int newCap;
             if(curr->vals.capacity>0)
             {
-                newCap = curr->vals.capacity * 2;
+                newCap = curr->vals.capacity * 2;  // Double capacity
             }
             else
             {
-                newCap = 4;
+                newCap = 4;  // Initial capacity
             }
 
+            // Reallocate ids array
             int* newID = (int*)realloc(curr->vals.ids, newCap*sizeof(int));
             if(newID==NULL)
             {
-                return 0;
+                return 0;  // Failed to resize
             }
             curr->vals.ids = newID;
             curr->vals.capacity = newCap;
         }
 
+        // Add animalId to the list
         curr->vals.ids[curr->vals.count] = animalId;
         curr->vals.count +=1; 
-        return 1;
+        return 1;  // Successfully added
     }
     else 
     {
+        // Create new entry for this key
         Entry* newEntry = (Entry*)malloc(sizeof(Entry));
         if(newEntry==NULL)
         {
-            return 0;   
+            return 0;  // Failed to allocate
         }
+        
+        // Copy key string
         newEntry->key = strdup(key);
         if(newEntry->key==NULL)
         {
             free(newEntry);
-            return 0;
+            return 0;  // Failed to copy key
         }
+        
+        // Initialize vals list with initial capacity
         newEntry->vals.capacity = 4;
         newEntry->vals.count = 0;
         newEntry->vals.ids = (int*)malloc(4*sizeof(int));
@@ -544,15 +626,18 @@ int h_put(Hash *h, const char *key, int animalId)
         {
             free(newEntry->key);
             free(newEntry);
-            return 0;
+            return 0;  // Failed to allocate ids array
         }
+        
+        // Add first animalId
         newEntry->vals.ids[newEntry->vals.count++] = animalId;
 
+        // Insert at head of bucket chain
         newEntry->next = h->buckets[idx];
         h->buckets[idx] = newEntry;
-        h->size +=1;
+        h->size +=1;  // Increment entry count
 
-        return 1;
+        return 1;  // Successfully added
     }
 }
 
@@ -567,29 +652,33 @@ int h_put(Hash *h, const char *key, int animalId)
  */
 int h_contains(const Hash *h, const char *key, int animalId) 
 {
+    // Calculate which bucket this key would be in
     int idx = h_hash(key) % h->nbuckets;
+    
+    // Search for entry with matching key
     Entry* curr = h->buckets[idx];
     while(curr!=NULL)
     {
         if(strcmp(curr->key, key)==0)
         {
-            break;
+            break;  // Found matching key
         }
         curr = curr->next;
     }
 
     if(curr!=NULL)
     {
+        // Entry found, search for animalId in its list
         for(int i = 0; i<curr->vals.count; i++)
         {
             if(curr->vals.ids[i]==animalId)
             {
-                return 1;
+                return 1;  // Found the key-animalId pair
             }
         }
     }
 
-    return 0;
+    return 0;  // Key not found or animalId not in list
 }
 
 /* TODO 25: Implement h_get_ids
@@ -609,18 +698,23 @@ int h_contains(const Hash *h, const char *key, int animalId)
  */
 int *h_get_ids(const Hash *h, const char *key, int *outCount) 
 {
+    // Calculate which bucket this key would be in
     int idx = h_hash(key) % h->nbuckets;
+    
+    // Search for entry with matching key
     Entry* curr = h->buckets[idx];
     while(curr!=NULL)
     {
         if(strcmp(curr->key, key)==0)
         {
+            // Found the key, return its ids array
             *outCount = curr->vals.count;
             return curr->vals.ids;
         }
         curr = curr->next;
     }
 
+    // Key not found
     *outCount = 0;
     return NULL;
 }
@@ -640,21 +734,30 @@ int *h_get_ids(const Hash *h, const char *key, int *outCount)
  */
 void h_free(Hash *h) 
 {
+    // Free all entries in each bucket
     for(int i = 0; i<h->nbuckets; i++)
     {
         Entry* curr = h->buckets[i];
         Entry* next;
+        
+        // Traverse the chain at this bucket
         while(curr!=NULL)
         {
-            free(curr->key);
-            free(curr->vals.ids);
+            // Free entry's data
+            free(curr->key);      // Free the key string
+            free(curr->vals.ids); // Free the ids array
+            
+            // Move to next and free current entry
             next = curr->next;
             free(curr);
             curr = next;
         }
     }
 
+    // Free the buckets array itself
     free(h->buckets);
+    
+    // Reset hash table to empty state
     h->buckets = NULL;
     h->size = 0;
 }

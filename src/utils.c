@@ -30,52 +30,51 @@ extern Node *g_root;
 int check_integrity() {
     // Step 1: Return 1 if g_root is NULL (empty tree is valid)
     if (g_root == NULL) {
-        return 1;
+        return 1;  // An empty tree is considered valid
     }
     
     // Step 2: Initialize queue and enqueue root with id=0
     Queue q;
     q_init(&q);
-    q_enqueue(&q, g_root, 0);
+    q_enqueue(&q, g_root, 0);  // Start BFS from root with ID 0
     
-    // Step 3: Set valid = 1
+    // Step 3: Set valid = 1 (assume valid until proven otherwise)
     int valid = 1;
     
-    // Step 4: While queue not empty
+    // Step 4: While queue not empty - BFS traversal of tree
     while (!q_empty(&q)) {
         Node *node;
         int id;
         
-        // Dequeue node
+        // Dequeue next node to check
         q_dequeue(&q, &node, &id);
         
-        // If node->isQuestion
+        // Check if node follows the rules based on its type
         if (node->isQuestion) {
-            // Check if yes == NULL or no == NULL
+            // Question nodes MUST have both yes and no children
             if (node->yes == NULL || node->no == NULL) {
-                // Question nodes MUST have both children
+                // Invalid: Question node missing a child
                 valid = 0;
-                break;
+                break;  // Stop checking once we find an error
             }
-            // Otherwise, enqueue both children
-            q_enqueue(&q, node->yes, id * 2 + 1);  // arbitrary id for left child
-            q_enqueue(&q, node->no, id * 2 + 2);   // arbitrary id for right child
+            // Valid question node - enqueue both children for checking
+            q_enqueue(&q, node->yes, id * 2 + 1);  // Left child gets odd ID
+            q_enqueue(&q, node->no, id * 2 + 2);   // Right child gets even ID
         }
-        // Else (leaf node)
         else {
-            // Check if yes != NULL or no != NULL
+            // Leaf nodes (animals) must NOT have any children
             if (node->yes != NULL || node->no != NULL) {
-                // Leaf nodes must NOT have any children
+                // Invalid: Leaf node has children
                 valid = 0;
-                break;
+                break;  // Stop checking once we find an error
             }
-            // Leaf nodes don't have children to enqueue
+            // Valid leaf node - no children to enqueue
         }
     }
     
-    // Step 5: Free queue and return valid
-    q_free(&q);
-    return valid;
+    // Step 5: Free queue and return validity result
+    q_free(&q);  // Clean up queue memory
+    return valid;  // Return 1 if valid, 0 if invalid
 }
 
 typedef struct PathNode {

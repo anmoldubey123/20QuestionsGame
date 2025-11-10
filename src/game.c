@@ -118,7 +118,7 @@ void play_game() {
             } 
             // If wrong: LEARNING PHASE
             else {
-// Step 5c.i: Get correct animal name from user
+                // Step 5c.i: Get correct animal name from user
                 clear();
                 attron(COLOR_PAIR(5) | A_BOLD);
                 mvprintw(0, 0, "%-80s", " Learning New Animal");
@@ -227,29 +227,40 @@ void play_game() {
  */
 int undo_last_edit() 
 {
+    // Check if there are any edits to undo
     if(g_undo.size==0)
     {
-        return 0;
+        return 0;  // Nothing to undo
     }
 
+    // Get pointers to both stacks for clarity
     EditStack* undoPtr = &g_undo;
     EditStack* redoPtr = &g_redo;
+    
+    // Pop the most recent edit from undo stack
     Edit edit = es_pop(undoPtr);
 
+    // Restore the tree to its state before this edit
     if(edit.parent==NULL)
     {
+        // The edit was at the root level
         g_root = edit.oldLeaf;
     }
     else if(edit.wasYesChild)
     {
+        // The edit replaced parent's yes child
         edit.parent->yes = edit.oldLeaf;
     }
     else 
     {
+        // The edit replaced parent's no child
         edit.parent->no = edit.oldLeaf;
     }
+    
+    // Push edit to redo stack so it can be reapplied later
     es_push(redoPtr, edit);
-    return 1;
+    
+    return 1;  // Successfully undid the edit
 }
 
 /* TODO 33: Implement redo_last_edit
@@ -270,29 +281,38 @@ int undo_last_edit()
  */
 int redo_last_edit() 
 {
+    // Check if there are any edits to redo
     if(g_redo.size==0)
     {
-        return 0;
+        return 0;  // Nothing to redo
     }
 
+    // Get pointers to both stacks for clarity
     EditStack* redoPtr = &g_redo;
     EditStack* undoPtr = &g_undo;
+    
+    // Pop the most recent edit from redo stack
     Edit edit = es_pop(redoPtr);
 
+    // Reapply the edit to the tree
     if(edit.parent==NULL)
     {
+        // The edit was at the root level
         g_root = edit.newQuestion;
     }
     else if(edit.wasYesChild)
     {
+        // The edit replaced parent's yes child
         edit.parent->yes = edit.newQuestion;
     }
     else 
     {
+        // The edit replaced parent's no child
         edit.parent->no = edit.newQuestion;
     }
 
+    // Push edit back to undo stack so it can be undone again
     es_push(undoPtr, edit);
 
-    return 1;
+    return 1;  // Successfully redid the edit
 }
